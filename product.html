@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
+
+    <title>Document</title>
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+        }
+
+
+
+        #sidebar .nav-link.active,
+        #sidebar .nav-link:hover {
+            background-color: #374151;
+            color: #fff;
+        }
+
+
+        .table td,
+        .table th {
+            vertical-align: middle;
+
+        }
+    </style>
+
+    <script>
+        $(document).ready(function () {
+
+            $('#sidebar').load('sidebar.html', function () {
+                highlightActiveSidebarLink();
+            });
+
+            const token = localStorage.getItem('token');
+
+
+            if (!token) {
+
+                window.location.replace('login.html')
+                return;
+            }
+            loadProducts();
+            $('#header').load('header.html', function () {
+                $('#show-name').text('Sản phẩm')
+                const email = localStorage.getItem('email');
+                $('#user-dropdown').html(`
+                <div class="dropdown d-flex align-items-center gap-2">
+                    <button
+                        class="btn btn-light border rounded-circle d-flex align-items-center justify-content-center"
+                        style="width: 42px; height: 42px;" data-bs-toggle="dropdown"><i class="bi bi-person"></i>
+                                                
+                    </button>
+                    <span>${email}</span>
+                    <ul class="dropdown-menu">
+                        <li><a class="logout-btn dropdown-item" href="#">Đăng xuất</a></li>
+                    </ul>
+                </div>
+            `)
+            });
+            $('#export-file').on('click', function () {
+                window.location.href = 'http://localhost:5555/export/products'
+            })
+
+
+            $(document).on('click', '.logout-btn', function (e) {
+                e.preventDefault();
+                localStorage.removeItem('token')
+                localStorage.removeItem('email')
+                window.location.href = 'login.html'
+            })
+
+            $('.search-name').on('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    loadProducts(1)
+                }
+            })
+            $('.category-filter').on('change', function () {
+                loadProducts(1)
+            })
+            $('#price-sort').on('change', function () {
+                const sortOrder = $(this).val();
+                if (sortOrder === 'desc' || sortOrder === 'asc') {
+                    $('#sort_by').val('price');
+                    $('#sort_order').val(sortOrder);
+                } else {
+                    $('#sort_by').val('')
+                    $('#sort_order').val('');
+                }
+                loadProducts(1)
+            })
+            $('.add-product').click(function () {
+                $('#myModal h3').text('Thêm sản phẩm');
+                $('.submit-product').text('Thêm sản phẩm').attr('data-type', 'insert');
+                $('.insert-name').val('');
+                $('.insert-price').val('');
+                $('.insert-category').val('');
+                $('.insert-quantity').val('');
+                $('.insert-description').val('');
+                $('.insert-image').val('');
+                $('.preview-image').hide().attr('src', '');
+
+            })
+            $(document).on('click', '.update-product', function () {
+                const id = $(this).data('id');
+
+                $('#myModal h3').text('Cập nhật sản phẩm');
+                $('.submit-product').text('Cập nhật sản phẩm').attr('data-type', 'update');
+                $('.product-id').val(id);
+
+                $.ajax({
+                    url: `http://localhost:5555/admin/products/${id}`,
+                    method: 'get',
+                    success: function (res) {
+                        console.log(res.data)
+                        $('.insert-name').val(res.data[0].name_product),
+                            $('.insert-price').val(res.data[0].price),
+                            $('.insert-category').val(res.data[0].category_id),
+                            $('.insert-quantity').val(res.data[0].stock),
+                            $('.insert-description').val(res.data[0].description),
+
+                            $('.preview-image').attr('src', `http://localhost:5555/uploads/${res.data[0].image}`).show(),
+                            $('.old-image').val(res.data[0].image)
+
+                    }
+                })
+            })
+            $('.submit-product').click(function (e) {
+                e.preventDefault();
+                const type = $(this).attr('data-type')
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    alert('Bạn chưa đăng nhập')
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('name_product', $('.insert-name').val());
+                formData.append('price', $('.insert-price').val());
+                formData.append('category_id', $('.insert-category').val());
+                formData.append('stock', $('.insert-quantity').val());
+                formData.append('description', $('.insert-description').val());
+                formData.append('old_image', $('.old-image').val())
+                const file = $('.insert-image')[0].files[0]
+                if (file) {
+                    formData.append('image', file)
+
+                }
+
+                let method = 'post';
+                let url = 'http://localhost:5555/admin/products';
+
+                if (type === 'update') {
+                    const id = $('.product-id').val();
+                    url = `http://localhost:5555/admin/products/${id}`;
+                    method = 'put'
+                }
+                $.ajax({
+                    url,
+                    method,
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    },
+                    data: formData,
+                    contentType: false,
+                    processData: false,
+                    success: function (res) {
+                        if (res.result === 1) {
+                            alert(type === 'insert' ? 'Thêm mới sản phẩm thành công' : 'Cập nhật sản phẩm thành công');
+                            $('#myModal').modal('hide');
+                            loadProducts();
+                        } else {
+                            alert('Lỗi : ' + res.message)
+                        }
+                    },
+                    error: function (err) {
+                        console.error('Lỗi : ', err)
+                    }
+                })
+            })
+
+
+            $(document).on('click', '.delete-btn', function (e) {
+                e.preventDefault();
+                const id = $(this).data('id');
+                const token = localStorage.getItem('token')
+                if (!token) {
+                    alert('Chưa đăng nhập');
+                    return
+                }
+                $.ajax({
+                    url: `http://localhost:5555/admin/products/${id}`,
+                    method: 'delete',
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    },
+                    success: function (res) {
+                        if (res.result === 1) {
+                            alert(res.message)
+                            loadProducts()
+                        } else {
+                            alert('Lỗi : ' + res.message);
+                        }
+                    }
+                })
+            })
+        })
+
+
+        // function secureAjax(settings) {
+        //     const token = localStorage.getItem('token');
+        //     if (!token) {
+        //         alert('Chưa đăng nhập');
+        //         window.location.href = 'login.html';
+        //         return;
+        //     }
+
+        //     $.ajax({
+        //         ...settings,
+        //         headers: {
+        //             Authorization: `Bearer ${token}`
+        //         },
+        //         success: settings.success,
+        //         error: function (xhr) {
+        //             const message = xhr.responseJSON?.message || '';
+        //             if (message.includes('Token không hợp lệ hoặc hết hạn')) {
+        //                 $.ajax({
+        //                     url: 'http://localhost:5555/refreshToken',
+        //                     method: 'get',
+        //                     xhrFields: { withCredentials: true },
+        //                     success: function (res) {
+        //                         if (res.result === 1) {
+        //                             localStorage.setItem('token', res.token)
+
+        //                             $.ajax({
+        //                                 ...settings,
+        //                                 headers: {
+        //                                     Authorization: `Bearer ${res.token}`
+        //                                 },
+        //                                 success:settings.success,
+        //                                 error:settings.error
+        //                             })
+        //                         }else{
+        //                             alert('Phiên đăng nhập đã hết hạn , vui lòng đăng nhập lại ')
+        //                             window.location.href = 'login.html'
+        //                         }
+        //                     }
+        //                 })
+        //             }else{
+        //                 settings.error?.(xhr);
+        //             }
+        //         }
+        //     })
+        // }
+
+
+        function loadProducts(page = 1) {
+            const limit = 5;
+            const name_product = $('.search-name').val();
+            const category_id = $('.category-filter').val();
+            const sort_by = $('#sort_by').val();
+            const sort_order = $('#sort_order').val();
+            const data = {
+                page,
+                limit,
+                name_product,
+                sort_by,
+                sort_order
+            }
+            if (category_id !== '') {
+                data.category_id = category_id;
+            }
+
+            $.ajax({
+                url: 'http://localhost:5555/admin/products',
+                method: 'get',
+                data,
+
+                success: function (res) {
+                    renderProducts(res.data, page, limit)
+                    renderPagination(res.pagination.total_items, res.pagination.page, res.pagination.limit)
+                },
+                error: function (err) {
+                    console.error('Lỗi', err)
+                }
+            })
+        }
+
+        function renderProducts(products, page = 1, limit = 8) {
+            if (!products || products.length === 0) {
+                $('#product-list').html('')
+                $('.table-container').hide()
+                $('.no-products').show()
+                return;
+            }
+            $('.no-products').hide();
+            $('.table-container').show()
+
+            const html = products.map((p, index) => `
+                <tr>
+                    <td>${(page - 1) * limit + index + 1}</td>
+                    <td>
+                        <img src="http://localhost:5555/uploads/${p.image}" alt="${p.name_product}"
+                        class="img-fluid rounded-start "
+                        style="height: 80px; width: 80px; object-fit: cover; border-radius: 8px;">
+                        ${p.name_product}
+                    </td>
+                   
+                    <td>${p.category_name}</td>
+                    <td>
+                     <span class="badge ${p.status === 'Còn hàng' ? 'bg-success-subtle text-success p-2' : 'bg-danger-subtle text-danger p-2'}">
+                    ${p.status}
+                    </span>
+
+                    </td>
+                   
+                    <td>${p.stock}</td>
+                     <td>${p.price.toLocaleString('vi-VN')}đ</td>
+                    <td class="text-end">
+                        <i class="bi bi-pencil-square fs-5 me-2 update-product" data-id="${p.id}" data-bs-toggle="modal" data-bs-target="#myModal"></i>
+                        <i data-id="${p.id}" class="bi bi-trash fs-5 delete-btn" ></i>
+                    </td>
+
+                </tr>
+            `)
+            $('#product-list').html(html.join(''));
+
+        }
+
+        function highlightActiveSidebarLink() {
+            const currentPage = window.location.pathname;
+            $('#sidebar .nav-link').each(function () {
+                const linkHref = $(this).attr('href');
+                $(this).removeClass('active')
+                if (currentPage.endsWith(linkHref)) {
+                    $(this).addClass('active')
+                }
+            })
+        }
+
+        function renderPagination(total, currentPage, limit) {
+            const totalPages = Math.ceil(total / limit);
+
+            let html = '';
+            for (let i = 1; i <= totalPages; i++) {
+                const activeClass = i === currentPage ? 'active' : '';
+                html += `<li class="page-item " ><a href="" class="page-link border-0 rounded ${activeClass ? 'bg-success text-white' : 'text-dark'} "   data-page="${i}">${i}</a></li>`
+            }
+            $('#pagination').html(`<ul class="pagination  justify-content-end mx-2">${html}</ul>`);
+            $('.page-link').click(function (e) {
+                e.preventDefault();
+                const page = parseInt($(this).data('page'));
+                loadProducts(page)
+            })
+        }
+    </script>
+</head>
+
+<body class="bg-light">
+    <div class="d-flex">
+        <!-- Sidebar -->
+        <div id="sidebar"></div>
+
+        <!-- Main Content -->
+        <div class="flex-grow-1">
+            <!-- Header -->
+            <div id="header"></div>
+
+            <!-- Main Section -->
+            <main class="container-fluid ">
+                <!-- Filter Card -->
+                <main class="p-3">
+                    <div class="card shadow-sm">
+                        <div class="card-body">
+                            <div class="row align-items-center pb-3 border-bottom">
+                                <div class="col-md-3">
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                        <input type="text" class="form-control search-name"
+                                            placeholder="Tìm theo tên sản phẩm">
+                                    </div>
+
+                                </div>
+
+                                <div class="col-md-3">
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="bi bi-filter"></i></span>
+
+                                        <select class="category-filter form-select">
+                                            <option value="">Tất cả danh mục</option>
+                                            <option value="1">Điện thoại</option>
+                                            <option value="2">Máy tính bảng</option>
+                                            <option value="3">Phụ kiện</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <input type="hidden" id="sort_by" value="">
+                                    <input type="hidden" id="sort_order" value="">
+                                    <select id="price-sort" class="form-select ">
+                                        <option value="">Giá</option>
+                                        <option value="desc">Cao -> Thấp</option>
+                                        <option value="asc">Thấp -> Cao</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <button id="export-file" class="btn btn-secondary me-2"><i
+                                            class="bi bi-file-earmark-arrow-down me-1"></i>Xuất file</button>
+                                    <button class="add-product btn btn-success" data-bs-toggle="modal"
+                                        data-bs-target="#myModal"> <i class="bi bi-plus-circle me-1"></i>Thêm
+                                        sản phẩm</button>
+                                </div>
+                            </div>
+
+                            <div class="table-responsive mt-2 shadow-sm rounded">
+                                <table class="table table-hover table-striped table-borderless">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>STT</th>
+                                            <th>Sản phẩm</th>
+                                            <th>Danh mục</th>
+                                            <th>Trạng thái</th>
+                                            <th>Số lượng</th>
+                                            <th>Giá</th>
+                                            <th class="text-end">Hành động</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="product-list">
+                                        <!-- Data render here -->
+
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div id="pagination"></div>
+                            <p class="no-products" style="display: none;">Không có sản phẩm nào.</p>
+                        </div>
+                    </div>
+                </main>
+        </div>
+        </main>
+    </div>
+    </div>
+
+    <div class="modal fade" id="myModal" tabindex="-1" aria-labelledby="myModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title" id="myModalLabel">Thêm sản phẩm</h3>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="productForm">
+                        <input type="hidden" class="product-id">
+                        <input type="hidden" class="old-image">
+
+                        <div class="mb-3">
+                            <label for="insert-name" class="form-label">Tên sản phẩm</label>
+                            <input type="text" class="form-control insert-name" id="insert-name">
+                        </div>
+                        <div class="mb-3">
+                            <label for="insert-price" class="form-label">Giá</label>
+                            <input type="number" class="form-control insert-price" id="insert-price">
+                        </div>
+                        <div class="mb-3">
+                            <label for="insert-category" class="form-label">Danh mục</label>
+                            <select class="form-select insert-category" id="insert-category">
+                                <option value="">Chọn danh mục</option>
+                                <option value="1">Điện thoại</option>
+                                <option value="2">Máy tính bảng</option>
+                                <option value="3">Phụ kiện</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="insert-quantity" class="form-label">Số lượng</label>
+                            <input type="number" class="form-control insert-quantity" id="insert-quantity">
+                        </div>
+                        <div class="mb-3">
+                            <label for="insert-description" class="form-label">Mô tả</label>
+                            <textarea class="form-control insert-description" id="insert-description"
+                                rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="insert-image" class="form-label">Ảnh sản phẩm</label>
+                            <input type="file" class="form-control insert-image" id="insert-image" accept="image/*">
+                            <img src="" alt="Preview" class="preview-image" style="max-width: 100px; display: none;">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-success submit-product" data-type="insert">Lưu</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+
+</html>

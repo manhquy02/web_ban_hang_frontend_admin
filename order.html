@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
+    <title>Document</title>
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+        }
+
+        #sidebar .nav-link.active,
+        #sidebar .nav-link:hover {
+            background-color: #374151;
+            color: #fff;
+        }
+
+        .table td,
+        .table th {
+            vertical-align: middle;
+        }
+    </style>
+    <script>
+        $(document).ready(function () {
+            $('#sidebar').load('sidebar.html')
+
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                window.location.replace('login.html');
+                return;
+            }
+            loadOrders();
+            $('#header').load('header.html', function () {
+                $('#show-name').text('Đơn hàng')
+                const email = localStorage.getItem('email');
+                $('#insert-name').text('Đơn hàng')
+                $('#user-dropdown').html(`
+                <div class="dropdown d-flex align-items-center gap-2">
+                    <button
+                        class="btn btn-light border rounded-circle d-flex align-items-center justify-content-center"
+                        style="width: 42px; height: 42px;" data-bs-toggle="dropdown">
+                        👤                         
+                    </button>
+                    <span>${email}</span>
+                    <ul class="dropdown-menu">
+                        <li><a class="logout-btn dropdown-item" href="#">Đăng xuất</a></li>
+                    </ul>
+                </div>
+            `)
+
+            })
+            $('.logout-btn').on('click', function (e) {
+                e.preventDefault();
+                localStorage.removeItem('token')
+                localStorage.removeItem('email')
+                window.location.href = 'login.html'
+            })
+
+            $('.search-phone').on('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    loadOrders(1)
+                }
+            })
+            $('.search-name').on('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    loadOrders(1)
+                }
+            })
+            $('.start-date').on('change', function () {
+                loadOrders(1)
+            })
+            $('.end-date').on('change', function () {
+                loadOrders(1)
+            })
+            $('.category-filter').on('change', function () {
+                loadProducts(1)
+            })
+            $('.add-product').click(function () {
+                $('#myModal h3').text('Thêm sản phẩm');
+                $('.submit-product').text('Thêm sản phẩm').attr('data-type', 'insert');
+                $('.insert-name').val('');
+                $('.insert-price').val('');
+                $('.insert-category').val('');
+                $('.insert-quantity').val('');
+                $('.insert-description').val('');
+                $('.insert-image').val('');
+                $('.preview-image').hide().attr('src', '');
+
+            })
+            $(document).on('click', '.detail-item', function () {
+                const id = $(this).data('id');
+                localStorage.setItem('orderId', id);
+                window.location.href = 'order-detail.html'
+
+            })
+            $('.submit-product').click(function (e) {
+                e.preventDefault();
+                const type = $(this).attr('data-type')
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    alert('Bạn chưa đăng nhập')
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('name_product', $('.insert-name').val());
+                formData.append('price', $('.insert-price').val());
+                formData.append('category_id', $('.insert-category').val());
+                formData.append('stock', $('.insert-quantity').val());
+                formData.append('description', $('.insert-description').val());
+                formData.append('old_image', $('.old-image').val())
+                const file = $('.insert-image')[0].files[0]
+                if (file) {
+                    formData.append('image', file)
+
+                }
+
+                let method = 'post';
+                let url = 'http://localhost:5555/products';
+
+                if (type === 'update') {
+                    const id = $('.product-id').val();
+                    url = `http://localhost:5555/products/${id}`;
+                    method = 'put'
+                }
+                $.ajax({
+                    url,
+                    method,
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    },
+                    data: formData,
+                    contentType: false,
+                    processData: false,
+                    success: function (res) {
+                        if (res.result === 1) {
+                            alert(type === 'insert' ? 'Thêm mới sản phẩm thành công' : 'Cập nhật sản phẩm thành công');
+                            $('#myModal').modal('hide');
+                            loadProducts();
+                        } else {
+                            alert('Lỗi : ' + res.message)
+                        }
+                    },
+                    error: function (err) {
+                        console.error('Lỗi : ', err)
+                    }
+                })
+            })
+
+
+            $(document).on('click', '.delete-btn', function (e) {
+                e.preventDefault();
+                const id = $(this).data('id');
+                const token = localStorage.getItem('token')
+                if (!token) {
+                    alert('Chưa đăng nhập');
+                    return
+                }
+                $.ajax({
+                    url: `http://localhost:5555/products/${id}`,
+                    method: 'delete',
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    },
+                    success: function (res) {
+                        if (res.result === 1) {
+                            alert(res.message)
+                            loadProducts()
+                        } else {
+                            alert('Lỗi : ' + res.message);
+                        }
+                    }
+                })
+            })
+
+            $('.price-sort').on('change', function () {
+                const sortOrder = $(this).val();
+                if (sortOrder === 'desc' || sortOrder === 'asc') {
+                    $('#sort_by').val('total_price');
+                    $('#sort_order').val(sortOrder);
+                } else {
+                    $('#sort_by').val('');
+                    $('#sort_order').val('');
+                }
+                loadOrders(1)
+            })
+
+        })
+
+
+
+
+        function loadOrders(page = 1) {
+            const limit = 10;
+            const phone = $('.search-phone').val().trim();
+            const receiver_Name = $('.search-name').val().trim();
+            const start_date = $('.start-date').val();
+            const end_date = $('.end-date').val();
+            const sort_by = $('#sort_by').val();
+            const sort_order = $('#sort_order').val();
+            // const category_id = $('.category-filter').val();
+
+            const data = {
+                page,
+                limit,
+                // name_product
+                phone,
+                receiver_Name,
+                start_date,
+                end_date,
+                sort_by,
+                sort_order
+
+
+            }
+            // if (category_id !== '') {
+            //     data.category_id = category_id;
+            // }
+            const token = localStorage.getItem('token')
+
+            $.ajax({
+                url: 'http://localhost:5555/admin/orders',
+                method: 'get',
+
+                data,
+                headers: {
+                    Authorization: `Bearer ${token}`
+                },
+                success: function (res) {
+                    console.log(res.data)
+                    renderOrders(res.data, page, limit)
+                    renderPagination(res.pagination.total_items, res.pagination.page, res.pagination.limit)
+                },
+                error: function (err) {
+                    console.error('Lỗi', err)
+                }
+            })
+        }
+
+        function renderOrders(orders, page = 1, limit = 9) {
+            // if (!products || products.length === 0) {
+            //     $('#product-list').html()
+            //     $('.table-container').hide()
+            //     $('.no-products').show()
+            //     return;
+            // }
+            // $('.no-products').hide();
+            // $('.table-container').show()
+
+            const html = orders.map((o, index) => `
+                <tr>
+                    <td>${(page - 1) * limit + index + 1}</td>
+                    <td>${new Date(o.created_at).toLocaleString('vi-VN')}</td>
+                    <td>${o.receiver_Name}</td>
+                    <td>${o.phone}</td>
+                    <td>${(o.total_price.toLocaleString('vi-VN'))}đ</td>
+                    <td class="text-end">
+                        <i class="bi bi-eye-fill fs-5 detail-item" data-id="${o.id}"></i>
+                      
+                    </td>   
+                    
+                </tr>
+            `)
+            $('#order-list').html(html.join(''));
+
+        }
+
+        function renderPagination(total, currentPage, limit) {
+            const totalPages = Math.ceil(total / limit);
+
+            let html = '';
+            for (let i = 1; i <= totalPages; i++) {
+                const activeClass = i === currentPage ? 'active' : '';
+                html += `<li class="page-item"><a href="" class="page-link  border-0 rounded ${activeClass ? 'bg-success text-white' : 'text-dark'}" data-page="${i}">${i}</a></li>`
+            }
+            $('#pagination').html(`<ul class="pagination  justify-content-end ">${html}</ul>`);
+            $('.page-link').click(function (e) {
+                e.preventDefault();
+                const page = parseInt($(this).data('page'));
+                loadOrders(page)
+            })
+        }
+
+    </script>
+</head>
+
+<body class="bg-light">
+    <div class="d-flex">
+        <div id="sidebar"></div>
+        <div class="flex-grow-1 ">
+            <div id="header"></div>
+            <main class="container-fluid">
+                <main class="p-3">
+                    <div class="card shadow-sm">
+                        <div class="card-body">
+                            <div class="row align-items-center pb-3 border-bottom">
+                                <div class="col-md-2 ">
+                                    <input type="phone" class="search-phone form-control" placeholder="Tìm theo SĐT">
+                                </div>
+                                <div class="col-md-2 ">
+                                    <input type="text" class="search-name form-control" placeholder="Tìm theo tên ">
+                                </div>
+
+                                <div class="col-md-4 ">
+
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span> Ngày:</span>
+                                        <input type="date" class="start-date form-control">
+                                        <span class="align-self-center">→</span>
+                                        <input type="date" class="end-date form-control">
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center col-auto ms-auto">
+
+                                    <div class="me-2">
+                                        <input type="hidden" id="sort_by" value="">
+                                        <input type="hidden" id="sort_order" value="">
+                                        <select class="form-select price-sort">
+                                            <option value="">Tổng tiền</option>
+                                            <option value="asc">Thấp -> Cao</option>
+                                            <option value="desc">Cao -> Thấp</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <button class="btn btn-secondary"><i
+                                                class="bi bi-file-earmark-arrow-down"></i>Xuất
+                                            file</button>
+                                    </div>
+
+                                </div>
+                            </div>
+
+                            <div class="table-container mt-2 shadow-sm rounded">
+                                <table class="table table-hover table-borderless table-striped ">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>STT</th>
+                                            <th>Ngày đặt</th>
+
+                                            <th>Tên</th>
+
+                                            <th>SĐT</th>
+                                            <th>Giá</th>
+                                            <th class="text-end">Hành động</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="order-list">
+
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div id="pagination"></div>
+                            <!-- <p class="no-products" style="display: none;">Không có sản phẩm nào.</p> -->
+                        </div>
+                    </div>
+                </main>
+            </main>
+        </div>
+    </div>
+    </div>
+
+
+</body>
+
+
+</html>
